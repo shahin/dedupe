@@ -724,8 +724,8 @@ class ActiveMatching(Matching) :
         predicate_set = predicateGenerator(self.data_model, 
                                            index_predicates)
 
-        banned_fields = set([field for field in fields if field.getattr('for_blocking', True)])
-        required_fields = set([field for field in fields if field.getattr('for_blocking', False)])
+        banned_fields = set([field for field in self.data_model['fields'] if not getattr(field, 'for_blocking', True)])
+        required_fields = set([field for field in self.data_model['fields'] if getattr(field, 'for_blocking', False)])
         field_constraints = {'banned': banned_fields, 'required': required_fields}
 
         (self.predicates, 
