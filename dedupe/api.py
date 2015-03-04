@@ -724,12 +724,18 @@ class ActiveMatching(Matching) :
         predicate_set = predicateGenerator(self.data_model, 
                                            index_predicates)
 
+        banned_fields = set([field for field in fields if field.getattr('for_blocking', True)])
+        required_fields = set([field for field in fields if field.getattr('for_blocking', False)])
+        field_constraints = {'banned': banned_fields, 'required': required_fields}
+
         (self.predicates, 
          self.stop_words) = dedupe.training.blockTraining(training_pairs,
                                                           predicate_set,
                                                           ppc,
                                                           uncovered_dupes,
-                                                          self._linkage_type)
+                                                          self._linkage_type,
+                                                          field_constraints
+                                                          )
 
         self.blocker = blocking.Blocker(self.predicates,
                                         self.stop_words) 

@@ -55,6 +55,9 @@ class FieldType(Variable) :
         else :
             self.name = "(%s: %s)" % (self.field, self.type)
 
+        if 'for blocking' in definition:
+            self.for_blocking = definition['for blocking']
+
         self.predicates = [predicates.SimplePredicate(pred, self.field) 
                            for pred in self._predicate_functions]
 

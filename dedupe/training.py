@@ -108,7 +108,8 @@ def blockTraining(training_pairs,
                   predicate_set,
                   eta=.1,
                   epsilon=.1,
-                  matching = "Dedupe"):
+                  matching = "Dedupe",
+                  field_constraints=None):
     '''
     Takes in a set of training pairs and predicates and tries to find
     a good set of blocking rules.
@@ -118,6 +119,12 @@ def blockTraining(training_pairs,
         Coverage = RecordLinkCoverage
     else :
         Coverage = DedupeCoverage
+
+    if field_constraints:
+        Coverage = type(
+            'ConstrainedPredicatesCoverage',
+            (CustomPredicateConstraints, Coverage, object, ),
+            {})
 
     # Setup
     record_ids = defaultdict(itertools.count().next)
@@ -129,7 +136,8 @@ def blockTraining(training_pairs,
                                                      record_ids)
     
     coverage = Coverage(predicate_set,
-                        dupe_pairs | distinct_pairs)
+                        dupe_pairs | distinct_pairs,
+                        field_constraints)
 
     predicate_set = coverage.overlap.keys()
     
@@ -355,6 +363,29 @@ class RecordLinkCoverage(Coverage) :
 
     def _records_to_index(self, pairs) :
         return set([record_2 for _, record_2 in pairs])
+
+
+class CustomPredicateConstraints(Coverage):
+    """A mixin for Coverage subclasses which removes predicates from the optimization set.
+    """
+
+    def __init__(self, predicate_set, pairs, field_constraints=None):
+
+        super(CustomPredicateConstraints, self).__init__(predicate_set, pairs)
+        if field_constraints:
+            self._ignore_predicates_by_field(field_constraints)
+
+    def _ignore_predicates_by_field(self, field_constraints):
+
+        banned_fields = set(field_constraints.get('banned', []))
+        required_fields = set(field_constraints.get('required', []))
+
+        for full_predicate in self.overlap.keys():
+            predicate_fields = set([predicate.field for predicate in full_predicate])
+            if (predicate_fields & banned_fields) or (required_fields and not (predicate_fields & required_fields)):
+                self.overlap.pop(full_predicate)
+            
+
 
 def stopWords(data, indices) :
     index_stop_words = {}
