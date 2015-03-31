@@ -1,6 +1,6 @@
 import pkgutil
 
-from backport import OrderedDict
+from collections import OrderedDict
 
 import dedupe.variables
 import dedupe.variables.base as base
@@ -114,7 +114,7 @@ def missing(data_model) :
     return missing_variables
 
 def interactions(definitions, primary_fields) :
-    field_d = dict((field.name, field) for field in primary_fields)
+    field_d = {field.name : field for field in primary_fields}
     interaction_class = InteractionType
 
     interactions = []

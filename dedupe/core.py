@@ -1,5 +1,15 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+from builtins import range, next, zip
+from future.utils import viewvalues
+import sys
+if sys.version < '3':
+    text_type = unicode
+    binary_type = str
+else:
+    text_type = str
+    binary_type = bytes
+    unicode = str
 
 import itertools
 import warnings
@@ -10,7 +20,6 @@ import tempfile
 import os
 
 import dedupe.backport as backport
-import rlr
 
 def randomPairsWithReplacement(n_records, sample_size) :
     # If the population is very large relative to the sample
@@ -56,9 +65,9 @@ def randomPairs(n_records, sample_size):
 
         random_indices = numpy.arange(n)
     else :
-        random_indices = numpy.random.randint(n, size=sample_size)
-        
-    random_indices.dtype = 'uint'
+        random_indices = numpy.random.randint(int(n), size=sample_size)
+
+    random_indices = random_indices.astype('uint')
 
     b = 1 - 2 * n_records
 
@@ -81,8 +90,8 @@ def randomPairsMatch(n_records_A, n_records_B, sample_size):
         if sample_size > n_records_A * n_records_B :
             warnings.warn("Requested sample of size %d, only returning %d possible pairs" % (sample_size, n_records_A * n_records_B))
 
-        return backport.cartesian((numpy.arange(n_records_A),
-                                   numpy.arange(n_records_B)))
+        return cartesian((numpy.arange(n_records_A),
+                          numpy.arange(n_records_B)))
 
     A_samples = numpy.random.randint(n_records_A, size=sample_size)
     B_samples = numpy.random.randint(n_records_B, size=sample_size)
@@ -97,15 +106,15 @@ def randomPairsMatch(n_records_A, n_records_B, sample_size):
         return set_pairs
 
 
-def trainModel(training_data, data_model, alpha=.001):
+def trainModel(training_data, data_model, learner=None, alpha=.001):
     """
     Use logistic regression to train weights for all fields in the data model
     """
     
-    labels = numpy.array(training_data['label'] == 'match', dtype='i4')
+    labels = numpy.array(training_data['label'] == b'match', dtype='i4')
     examples = training_data['distances']
 
-    (weight, bias) = rlr.lr(labels, examples, alpha)
+    weight, bias = learner(labels, examples, alpha)
 
     for i, field_definition in enumerate(data_model['fields']) :
         field_definition.weight = float(weight[i])
@@ -219,7 +228,7 @@ def mergeScores(score_queue, result_queue, stop_signals) :
 
     if len(scored_pairs) :
         python_type = type(scored_pairs['pairs'][0][0])
-        if python_type is str or python_type is unicode :
+        if python_type is binary_type or python_type is text_type :
             max_length = len(max(numpy.ravel(scored_pairs['pairs']), key=len))
             python_type = (unicode, max_length)
         
@@ -247,7 +256,7 @@ def scoreDuplicates(records, data_model, num_cores=1, threshold=0) :
         from multiprocessing.dummy import Process, Pool, Queue
         SimpleQueue = Queue
     else :
-        from backport import Process, Pool, SimpleQueue
+        from .backport import Process, Pool, SimpleQueue
 
     record_pairs_queue = SimpleQueue()
     score_queue =  SimpleQueue()
@@ -258,7 +267,7 @@ def scoreDuplicates(records, data_model, num_cores=1, threshold=0) :
     map_processes = [Process(target=score_records,
                              args=(record_pairs_queue,
                                    score_queue))
-                     for _ in xrange(n_map_processes)]
+                     for _ in range(n_map_processes)]
     [process.start() for process in map_processes]
 
     reduce_process = Process(target=mergeScores,
@@ -293,7 +302,7 @@ def fillQueue(queue, iterable, stop_signals) :
     last_rate = 10000
 
     while True :
-        chunk = list(itertools.islice(iterable, chunk_size))
+        chunk = list(itertools.islice(iterable, int(chunk_size)))
         if chunk :
             queue.put(chunk)
 
@@ -322,18 +331,18 @@ def fillQueue(queue, iterable, stop_signals) :
         else :
             # put poison pills in queue to tell scorers that they are
             # done
-            [queue.put(None) for _ in xrange(stop_signals)]
+            [queue.put(None) for _ in range(stop_signals)]
             break
 
 def peek(records) :
     try :
-        record = records.next()
-    except AttributeError as e:
-        if "has no attribute 'next'" not in str(e) :
+        record = next(records)
+    except TypeError as e:
+        if "not an iterator" not in str(e) :
             raise
         try :
             records = iter(records)
-            record = records.next()
+            record = next(records)
         except StopIteration :
             return None, records
     except StopIteration :
@@ -352,7 +361,7 @@ def freezeData(data) : # pragma : no cover
 
 def isIndexed(data, offset) :
     hashable = collections.Hashable
-    for i in xrange(offset, offset + len(data)) :
+    for i in range(offset, offset + len(data)) :
         if i not in data :
             return False
     else :
@@ -362,8 +371,8 @@ def index(data, offset=0) :
     if isIndexed(data, offset) :
         return data
     else :
-        data = dict(itertools.izip(itertools.count(offset), 
-                                   data.itervalues()))
+        data = dict(zip(itertools.count(offset), 
+                        viewvalues(data)))
         return data
 
 
@@ -383,7 +392,7 @@ class frozendict(collections.Mapping):
         return self._d[key]
 
     def __repr__(self) :
-        return '<frozendict %s>' % repr(self._d)
+        return u'<frozendict %s>' % repr(self._d)
 
     def __hash__(self):
         try:
@@ -391,3 +400,56 @@ class frozendict(collections.Mapping):
         except AttributeError:
             h = self._cached_hash = hash(frozenset(self._d.items()))
             return h
+
+
+def cartesian(arrays, out=None): # pragma : no cover
+    """Generate a cartesian product of input arrays.
+
+    Parameters
+    ----------
+    arrays : list of array-like
+    1-D arrays to form the cartesian product of.
+    out : ndarray
+    Array to place the cartesian product in.
+    
+    Returns
+    -------
+    out : ndarray
+    2-D array of shape (M, len(arrays)) containing cartesian products
+    formed of input arrays.
+    
+    Examples
+    --------
+    >>> cartesian(([1, 2, 3], [4, 5], [6, 7]))
+    array([[1, 4, 6],
+    [1, 4, 7],
+    [1, 5, 6],
+    [1, 5, 7],
+    [2, 4, 6],
+    [2, 4, 7],
+    [2, 5, 6],
+    [2, 5, 7],
+    [3, 4, 6],
+    [3, 4, 7],
+    [3, 5, 6],
+    [3, 5, 7]])
+    
+    References
+    ----------
+    http://stackoverflow.com/q/1208118
+    
+    """
+    arrays = [numpy.asarray(x).ravel() for x in arrays]
+    dtype = arrays[0].dtype
+
+    n = numpy.prod([x.size for x in arrays])
+    if out is None:
+        out = numpy.empty([n, len(arrays)], dtype=dtype)
+
+    m = n / arrays[0].size
+    out[:, 0] = numpy.repeat(arrays[0], m)
+    if arrays[1:]:
+        cartesian(arrays[1:], out=out[0:m, 1:])
+        for j in range(1, arrays[0].size):
+            out[j * m:(j + 1) * m, 1:] = out[0:m, 1:]
+    return out

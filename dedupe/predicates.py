@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+from builtins import str
 
 import re
 import math
@@ -82,52 +83,115 @@ class IndexPredicate(Predicate) :
         self.__dict__ = d
         self.index = None
 
-class TfidfPredicate(IndexPredicate):
+class TfidfIndexPredicate(IndexPredicate) :
     def initIndex(self, stop_words) :
         return tfidf.TfIdfIndex(stop_words)
+    
 
+class TfidfSearchPredicate(TfidfIndexPredicate):
     def __call__(self, record) :
         column = record[self.field]
         if column :
             try :
                 centers = self.index.search(self.preprocess(column), 
                                             self.threshold)
-
-                l_unicode = unicode
-                return [l_unicode(center) for center in centers]
-            except :
+            except AttributeError :
                 raise AttributeError("Attempting to block with an index "
                                      "predicate without indexing records")
+
+            l_str = str
+            return [l_str(center) for center in centers]
 
         else :
             return ()
 
-class TfidfTextPredicate(TfidfPredicate) :
-    type = "TfidfTextPredicate"
+class TfidfCanopyPredicate(TfidfIndexPredicate):
+    def __init__(self, *args, **kwargs) :
+        super(TfidfCanopyPredicate, self).__init__(*args, **kwargs)
+        self.canopy = {}
 
+    def __setstate__(self, *args, **kwargs) :
+        super(TfidfCanopyPredicate, self).__setstate__(*args, **kwargs)
+        self.canopy ={}
+
+    def __call__(self, record) :
+        block_key = None
+        column = record[self.field]
+
+        if column :
+
+            doc = self.preprocess(column)
+
+            try :
+                doc_id = self.index._doc_to_id[doc]
+            except AttributeError :
+                raise AttributeError("Attempting to block with an index "
+                                     "predicate without indexing records")
+
+            if doc_id in self.canopy :
+                block_key = self.canopy[doc_id]
+            else :
+                canopy_members = self.index.search(doc,
+                                                   self.threshold)
+                for member in canopy_members :
+                    if member not in self.canopy :
+                        self.canopy[member] = doc_id
+
+                if canopy_members :
+                    block_key = doc_id
+
+        if block_key is None :
+            return []
+        else :
+            return [str(block_key)]
+
+
+class TfidfTextPredicate(object) :
     rx = re.compile(r"(?u)\w+[\w*?]*")
 
     def preprocess(self, doc) :
         return tuple(self.rx.findall(doc))
 
-class TfidfSetPredicate(TfidfPredicate) :
-    type = "TfidfSetPredicate"
-
+class TfidfSetPredicate(object) :
     def preprocess(self, doc) :
         return doc
 
-class TfidfNGramPredicate(TfidfPredicate) :
-    type = "TfidfNGramPredicate"
-
+class TfidfNGramPredicate(object) :
     def preprocess(self, doc) :
         return tuple(ngrams(doc.replace(' ', ''), 2))
+
+class TfidfTextSearchPredicate(TfidfTextPredicate, 
+                               TfidfSearchPredicate) :
+    type = "TfidfTextSearchPredicate"
+
+class TfidfSetSearchPredicate(TfidfSetPredicate, 
+                              TfidfSearchPredicate) :
+    type = "TfidfSetSearchPredicate"
+
+class TfidfNGramSearchPredicate(TfidfNGramPredicate, 
+                                TfidfSearchPredicate) :
+    type = "TfidfNGramSearchPredicate"
+
+class TfidfTextCanopyPredicate(TfidfTextPredicate, 
+                               TfidfCanopyPredicate) :
+    type = "TfidfTextCanopyPredicate"
+
+class TfidfSetCanopyPredicate(TfidfSetPredicate, 
+                              TfidfCanopyPredicate) :
+    type = "TfidfSetCanopyPredicate"
+
+class TfidfNGramCanopyPredicate(TfidfNGramPredicate, 
+                                TfidfCanopyPredicate) :
+    type = "TfidfNGramCanopyPredicate"
+
+
 
 class CompoundPredicate(Predicate) :
     type = "CompoundPredicate"
 
     def __init__(self, predicates) :
         self.predicates = predicates
-        self.__name__ = u'(%s)' % u', '.join([unicode(pred)
+        self.__name__ = u'(%s)' % u', '.join([str(pred)
                                               for pred in 
                                               predicates])
 
@@ -145,7 +209,7 @@ class CompoundPredicate(Predicate) :
 
 def wholeFieldPredicate(field):
     """return the whole field"""
-    return (unicode(field), )
+    return (str(field), )
 
 def tokenFieldPredicate(field):
     """returns the tokens"""
@@ -168,8 +232,8 @@ def nearIntegersPredicate(field):
     near_ints = set(ints)
     for char in ints :
         num = int(char)
-        near_ints.add(unicode(num-1))
-        near_ints.add(unicode(num+1))
+        near_ints.add(str(num-1))
+        near_ints.add(str(num+1))
         
     return near_ints
 
@@ -182,11 +246,11 @@ def firstIntegerPredicate(field) :
 
 
 def ngramsTokens(field, n) :
-    grams = set([])
+    grams = set()
     n_tokens = len(field)
     for i in range(n_tokens):
         for j in range(i+n, min(n_tokens, i+n)+1):
-            grams.add(' '.join(unicode(tok) for tok in field[i:j]))
+            grams.add(' '.join(str(tok) for tok in field[i:j]))
     return grams
 
 
@@ -243,10 +307,10 @@ def doubleMetaphone(field) :
     return [metaphone for metaphone in doublemetaphone(field) if metaphone]
 
 def metaphoneToken(field) :
-    return set([metaphone_token for metaphone_token 
-                in itertools.chain(*(doublemetaphone(token) 
-                                     for token in set(field.split())))
-                if metaphone_token])
+    return {metaphone_token for metaphone_token 
+            in itertools.chain(*(doublemetaphone(token) 
+                                 for token in set(field.split())))
+            if metaphone_token}
 
 def existsPredicate(field) :
     try :
@@ -261,11 +325,11 @@ def existsPredicate(field) :
             return (u'0',)
 
 def wholeSetPredicate(field_set):
-    return (unicode(field_set),)
+    return (str(field_set),)
 
 def commonSetElementPredicate(field_set):
     """return set as individual elements"""
-    return tuple([unicode(each) for each in field_set])
+    return tuple([str(each) for each in field_set])
 
 def commonTwoElementsPredicate(field) :
     l = sorted(field)
@@ -276,10 +340,10 @@ def commonThreeElementsPredicate(field) :
     return ngramsTokens(l, 3)
 
 def lastSetElementPredicate(field_set) :
-    return (unicode(max(field_set)), )
+    return (str(max(field_set)), )
 
 def firstSetElementPredicate(field_set) :
-    return (unicode(min(field_set)), )
+    return (str(min(field_set)), )
 
 def magnitudeOfCardinality(field_set) :
     return orderOfMagnitude(len(field_set))
@@ -295,13 +359,13 @@ def latLongGridPredicate(field, digits=1):
     prior logical block (e.g., country).
     """
     if any(field) :
-        return (unicode([round(dim, digits) for dim in field]),)
+        return (str([round(dim, digits) for dim in field]),)
     else :
         return ()
 
 def orderOfMagnitude(field) :
     if field > 0 :
-        return (unicode(int(round(math.log10(field)))), )
+        return (str(int(round(math.log10(field)))), )
     else :
         return ()
 
@@ -309,5 +373,5 @@ def roundTo1(field) : # thanks http://stackoverflow.com/questions/3410976/how-to
     abs_num = abs(field)
     order = int(math.floor(math.log10(abs_num)))
     rounded = round(abs_num, -order)
-    return (unicode(int(math.copysign(rounded, field))),)
+    return (str(int(math.copysign(rounded, field))),)
         

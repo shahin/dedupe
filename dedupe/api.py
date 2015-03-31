@@ -4,6 +4,8 @@
 dedupe provides the main user interface for the library the
 Dedupe class
 """
+from __future__ import print_function, division
+from future.utils import viewitems, viewvalues
 
 import itertools
 import logging
@@ -14,10 +16,9 @@ import random
 import warnings
 import copy
 import os
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import simplejson as json
-
-from dedupe.backport import OrderedDict
+import rlr
 
 import dedupe
 import dedupe.sampling as sampling
@@ -32,6 +33,7 @@ from dedupe.datamodel import DataModel
 
 logger = logging.getLogger(__name__)
 
+
 class Matching(object):
     """
     Base Class for Record Matching Classes
@@ -42,9 +44,8 @@ class Matching(object):
     - `thresholdBlocks`
     - `matchBlocks`
     """
-
     def __init__(self) :
-        self.blocker = None
+        pass
 
     def thresholdBlocks(self, blocks, recall_weight=1.5): # pragma : nocover
         """
@@ -150,7 +151,7 @@ class Matching(object):
             try:
                 for field in value_1 :
                     logger.info((field.name, field.weight))
-            except TypeError:
+            except TypeError :
                 logger.info((key_1, value_1))
 
 
@@ -233,7 +234,7 @@ class DedupeMatching(Matching) :
         block, blocks = core.peek(blocks)
         self._checkBlock(block)
 
-	combinations = itertools.combinations
+        combinations = itertools.combinations
 
         pairs = (combinations(block, 2) for block in blocks)
 
@@ -265,22 +266,22 @@ class DedupeMatching(Matching) :
         blocks = defaultdict(dict)
 
         for field in self.blocker.index_fields :
-            unique_fields = set(record[field]
-                                for record 
-                                in data_d.itervalues()
-                                if record[field])
+            unique_fields = {record[field]
+                             for record 
+                             in viewvalues(data_d)
+                             if record[field]}
 
             self.blocker.index(unique_fields, field)
 
-        for block_key, record_id in self.blocker(data_d.iteritems()) :
+        for block_key, record_id in self.blocker(viewitems(data_d)) :
             blocks[block_key][record_id] = data_d[record_id]
 
         self.blocker.resetIndices()
 
-        blocks = [records for records in blocks.values()
-                  if len(records) > 1]
+        blocks = (records for records in blocks.values()
+                  if len(records) > 1)
         
-        blocks = dict([(frozenset(d.keys()), d) for d in blocks])
+        blocks = {frozenset(d.keys()) : d for d in blocks}
         blocks = blocks.values()
 
         for block in self._redundantFree(blocks) :
@@ -296,7 +297,7 @@ class DedupeMatching(Matching) :
 
         for block_id, records in enumerate(blocks) :
 
-            for record_id, record in records.iteritems() :
+            for record_id, record in viewitems(records) :
                 coverage[record_id].append(block_id)
 
         for block_id, records in enumerate(blocks) :
@@ -304,10 +305,10 @@ class DedupeMatching(Matching) :
                 logger.info("%s blocks" % block_id)
 
             marked_records = []
-            for record_id, record in records.iteritems() :
-                smaller_ids = set([covered_id for covered_id 
-                                   in coverage[record_id] 
-                                   if covered_id < block_id])
+            for record_id, record in viewitems(records) :
+                smaller_ids = {covered_id for covered_id 
+                               in coverage[record_id] 
+                               if covered_id < block_id}
                 marked_records.append((record_id, record, smaller_ids))
 
             yield marked_records
@@ -381,7 +382,7 @@ class RecordLinkMatching(Matching) :
                          recall. I.e. if you care twice as much about
                          recall as you do precision, set recall_weight
                          to 2.
-        """
+x        """
 
         blocked_pairs = self._blockData(data_1, data_2)
         return self.thresholdBlocks(blocked_pairs, recall_weight)
@@ -398,7 +399,7 @@ class RecordLinkMatching(Matching) :
         block, blocks = core.peek(blocks)
         self._checkBlock(block)
 
-	product = itertools.product
+        product = itertools.product
 
         pairs = (product(base, target) for base, target in blocks)
 
@@ -424,14 +425,14 @@ class RecordLinkMatching(Matching) :
                 self._checkRecordType(target[0][1])
 
     def _blockGenerator(self, messy_data, blocked_records) :
-        block_groups = itertools.groupby(self.blocker(messy_data.iteritems()), 
+        block_groups = itertools.groupby(self.blocker(viewitems(messy_data)), 
                                          lambda x : x[1])
 
         for i, (record_id, block_keys) in enumerate(block_groups) :
             if i % 100 == 0 :
                 logger.info("%s records" % i)
 
-            A = [(record_id, messy_data[record_id], set([]))]
+            A = [(record_id, messy_data[record_id], set())]
 
             B = {}
 
@@ -439,7 +440,7 @@ class RecordLinkMatching(Matching) :
                 if block_key in blocked_records :
                     B.update(blocked_records[block_key])
 
-            B = [(rec_id, record, set([]))
+            B = [(rec_id, record, set())
                  for rec_id, record
                  in B.items()]
 
@@ -454,7 +455,7 @@ class RecordLinkMatching(Matching) :
         for field in self.blocker.index_fields :
             fields_2 = (record[field]
                         for record 
-                        in data_2.itervalues())
+                        in viewvalues(data_2))
 
             self.blocker.index(set(fields_2), field)
 
@@ -496,8 +497,6 @@ class StaticMatching(Matching) :
         learned from ActiveMatching. If you need details for this
         file see the method [`writeSettings`][[api.py#writesettings]].
         """
-        super(StaticMatching, self).__init__()
-
         if num_cores is None :
             self.num_cores = multiprocessing.cpu_count()
         else :
@@ -512,7 +511,7 @@ class StaticMatching(Matching) :
                              "the current version of dedupe. This can happen "
                              "if you have recently upgraded dedupe.")
         except :
-            print "Something has gone wrong with loading the settings file"
+            print("Something has gone wrong with loading the settings file")
             raise
                              
 
@@ -522,6 +521,8 @@ class StaticMatching(Matching) :
 
         self.blocker = blocking.Blocker(self.predicates, 
                                         self.stop_words)
+
+
 
 
 
@@ -589,8 +590,6 @@ class ActiveMatching(Matching) :
         In in the record dictionary the keys are the names of the
         record field and values are the record values.
         """
-        super(ActiveMatching, self).__init__()
-
         self.data_model = DataModel(variable_definition)
 
         self.data_sample = data_sample
@@ -615,6 +614,9 @@ class ActiveMatching(Matching) :
         self.training_data = numpy.zeros(0, dtype=training_dtype)
         self.training_pairs = OrderedDict({u'distinct': [], 
                                            u'match': []})
+
+        self.learner = rlr.lr
+        self.blocker = None
 
 
     def cleanupTraining(self) : # pragma : no cover
@@ -653,7 +655,7 @@ class ActiveMatching(Matching) :
 
         self._addTrainingData(training_pairs)
 
-        self._trainClassifier()
+        self._trainClassifier(0.1)
 
     def train(self, ppc=.1, uncovered_dupes=1, index_predicates=True) : # pragma : no cover
         """Keyword arguments:
@@ -685,6 +687,22 @@ class ActiveMatching(Matching) :
                             Defaults to True.
 
         """
+        self._trainClassifier()
+        self._trainBlocker(ppc, uncovered_dupes, index_predicates)
+
+    def _trainClassifier(self, alpha=None) : # pragma : no cover
+
+        if alpha is None :
+            alpha = self._regularizer()
+
+        self.data_model = core.trainModel(self.training_data,
+                                          self.data_model, 
+                                          self.learner,
+                                          alpha)
+
+        self._logLearnedWeights()
+
+    def _regularizer(self) :
         n_folds = min(numpy.sum(self.training_data['label']==u'match')/3,
                       20)
         n_folds = max(n_folds,
@@ -693,23 +711,13 @@ class ActiveMatching(Matching) :
         logger.info('%d folds', n_folds)
 
         alpha = crossvalidation.gridSearch(self.training_data,
-                                           core.trainModel, 
+                                           self.learner,
                                            self.data_model, 
                                            self.num_cores,
                                            k=n_folds)
 
+        return alpha
 
-        self._trainClassifier(alpha)
-        self._trainBlocker(ppc, uncovered_dupes, index_predicates)
-
-
-    def _trainClassifier(self, alpha=.1) : # pragma : no cover
-
-        self.data_model = core.trainModel(self.training_data,
-                                          self.data_model, 
-                                          alpha)
-
-        self._logLearnedWeights()
 
     
     def _trainBlocker(self, ppc=1, uncovered_dupes=1, index_predicates=True) : # pragma : no cover
@@ -722,7 +730,8 @@ class ActiveMatching(Matching) :
         training_pairs[u'distinct'].extend(confident_nonduplicates)
 
         predicate_set = predicateGenerator(self.data_model, 
-                                           index_predicates)
+                                           index_predicates,
+                                           self.canopies)
 
         banned_fields = set([field for field in self.data_model['fields'] if not getattr(field, 'for_blocking', True)])
         required_fields = set([field for field in self.data_model['fields'] if getattr(field, 'for_blocking', False)])
@@ -786,11 +795,11 @@ class ActiveMatching(Matching) :
                                    u'distinct':[]})
 
 
-        self._trainClassifier(alpha=0.1)
+        self._trainClassifier(0.1)
 
         
         dupe_ratio = (len(self.training_pairs[u'match'])
-                      /(len(self.training_pairs[u'distinct']) + 1.0))
+                      /(len(self.training_pairs[u'distinct']) + 1))
 
         return self.activeLearner.uncertainPairs(self.data_model, dupe_ratio)
 
@@ -909,6 +918,7 @@ class Dedupe(DedupeMatching, ActiveMatching) :
     Public Methods
     - sample
     """
+    canopies = True
 
     def sample(self, data, sample_size=15000, 
                blocked_proportion=0.5) :
@@ -927,7 +937,8 @@ class Dedupe(DedupeMatching, ActiveMatching) :
 
         blocked_sample_size = int(blocked_proportion * sample_size)
         predicates = list(predicateGenerator(self.data_model, 
-                                             index_predicates=False))
+                                             index_predicates=False,
+                                             canopies=self.canopies))
 
 
         data = sampling.randomDeque(data)
@@ -961,6 +972,7 @@ class RecordLink(RecordLinkMatching, ActiveMatching) :
     Public Methods
     - sample
     """
+    canopies = False
 
     def sample(self, data_1, data_2, sample_size=150000, 
                blocked_proportion=.5) :
@@ -989,7 +1001,8 @@ class RecordLink(RecordLinkMatching, ActiveMatching) :
 
         blocked_sample_size = int(blocked_proportion * sample_size)
         predicates = list(predicateGenerator(self.data_model, 
-                                             index_predicates=False))
+                                             index_predicates=False,
+                                             canopies=self.canopies))
 
         data_1 = sampling.randomDeque(data_1)
         data_2 = sampling.randomDeque(data_2)
@@ -1004,8 +1017,8 @@ class RecordLink(RecordLinkMatching, ActiveMatching) :
                                                           len(data_2), 
                                                           random_sample_size)
 
-        random_sample_keys = set((a, b + offset) 
-                                 for a, b in random_sample_keys)
+        random_sample_keys = {(a, b + offset) 
+                              for a, b in random_sample_keys}
 
         data_1 = dict(data_1)
         data_2 = dict(data_2)
@@ -1039,7 +1052,7 @@ class GazetteerMatching(RecordLinkMatching) :
         for field in self.blocker.index_fields :
             self.blocker.index((record[field]
                                 for record 
-                                in data.itervalues()),
+                                in viewvalues(data)),
                                field)
 
         for block_key, record_id in self.blocker(data.items()) :
@@ -1052,10 +1065,10 @@ class GazetteerMatching(RecordLinkMatching) :
         for field in self.blocker.index_fields :
             self.blocker.unindex((record[field]
                                   for record 
-                                  in data.itervalues()),
+                                  in viewvalues(data)),
                                  field)
 
-        for block_key, record_id in self.blocker(data.iteritems()) :
+        for block_key, record_id in self.blocker(viewitems(data)) :
             try : 
                 del self.blocked_records[block_key][record_id]
             except KeyError :
@@ -1072,13 +1085,10 @@ class GazetteerMatching(RecordLinkMatching) :
         for larger data, use matchBlocks
         
         Arguments:
-        data_1    -- Dictionary of records from first dataset, where the 
-                     keys are record_ids and the values are dictionaries
-                     with the keys being field names
+        messy_data -- Dictionary of records from messy dataset, where the 
+                      keys are record_ids and the values are dictionaries with 
+                      the keys being field names
 
-        data_2    -- Dictionary of records from second dataset, same form 
-                     as data_1
-                                          
         threshold -- Number between 0 and 1 (default is .5). We will consider
                      records as potential duplicates if the predicted 
                      probability of being a duplicate is above the threshold.
@@ -1086,8 +1096,9 @@ class GazetteerMatching(RecordLinkMatching) :
                      Lowering the number will increase recall, raising it
                      will increase precision
         
-        n_matches -- Maximum number of possible matches from data_2
-                     for each record in data_1
+        n_matches -- Maximum number of possible matches from the canonical 
+                     record set to match against each record in the messy
+                     record set
         """
         blocked_pairs = self._blockData(messy_data)
         return self.matchBlocks(blocked_pairs, threshold, n_matches)
@@ -1098,17 +1109,20 @@ class Gazetteer(RecordLink, GazetteerMatching):
 class StaticGazetteer(StaticRecordLink, GazetteerMatching):
     pass
 
-def predicateGenerator(data_model, index_predicates) :
-    predicates = set([])
+def predicateGenerator(data_model, index_predicates, canopies) :
+    predicates = set()
     for definition in data_model.primary_fields :
-        if not index_predicates :
-            filtered_predicates = []
-            for predicate in definition.predicates :
-                if not hasattr(predicate, 'index') :
-                    filtered_predicates.append(predicate)
-            predicates.update(filtered_predicates)
-        else :
-            predicates.update(definition.predicates)
+        for predicate in definition.predicates :
+            if hasattr(predicate, 'index') :
+                if index_predicates :
+                    if hasattr(predicate, 'canopy') :
+                        if canopies :
+                            predicates.add(predicate)
+                    else :
+                        if not canopies :
+                            predicates.add(predicate)
+            else :
+                predicates.add(predicate)
 
     return predicates
 

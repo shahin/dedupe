@@ -1,15 +1,10 @@
-from base import FieldType
+from .base import FieldType
 from dedupe import predicates
 
 from affinegap import normalizedAffineGapDistance
 from simplecosine.cosine import CosineTextSimilarity, CosineSetSimilarity
 
-class ShortStringType(FieldType) :
-    comparator = normalizedAffineGapDistance
-    type = "ShortString"
-
-    _predicate_functions = (predicates.wholeFieldPredicate,
-                            predicates.tokenFieldPredicate,
+base_predicate_functions = (predicates.wholeFieldPredicate,
                             predicates.firstTokenPredicate,
                             predicates.commonIntegerPredicate,
                             predicates.nearIntegersPredicate,
@@ -17,42 +12,51 @@ class ShortStringType(FieldType) :
                             predicates.sameThreeCharStartPredicate,
                             predicates.sameFiveCharStartPredicate,
                             predicates.sameSevenCharStartPredicate,
-                            predicates.commonFourGram,
-                            predicates.commonSixGram,
-                            predicates.suffixArray,
                             predicates.commonTwoTokens,
                             predicates.commonThreeTokens,
                             predicates.fingerprint,
                             predicates.oneGramFingerprint,
                             predicates.twoGramFingerprint,
-                            predicates.sortedAcronym,
-                            predicates.doubleMetaphone,
-                            predicates.metaphoneToken)
+                            predicates.sortedAcronym)
+
+class ShortStringType(FieldType) :
+    type = "ShortString"
+
+    comparator = normalizedAffineGapDistance
+
+    _predicate_functions = (base_predicate_functions 
+                            + (predicates.commonFourGram,
+                               predicates.commonSixGram,
+                               predicates.tokenFieldPredicate,
+                               predicates.suffixArray,
+                               predicates.doubleMetaphone,
+                               predicates.metaphoneToken))
+
+    _index_predicates = (predicates.TfidfNGramCanopyPredicate, 
+                         predicates.TfidfNGramSearchPredicate)
+    _index_thresholds = (0.2, 0.4, 0.6, 0.8)
 
 class StringType(ShortStringType) :
-    comparator = normalizedAffineGapDistance
     type = "String"
 
-    _canopy_thresholds = (0.2, 0.4, 0.6, 0.8)
-
-    def __init__(self, definition) :
-        super(StringType, self).__init__(definition)
-
-        self.predicates += [predicates.TfidfTextPredicate(threshold, 
-                                                          self.field)
-                            for threshold in self._canopy_thresholds]
-
-        self.predicates += [predicates.TfidfNGramPredicate(threshold, 
-                                                          self.field)
-                            for threshold in self._canopy_thresholds]
+    _index_predicates = (predicates.TfidfNGramCanopyPredicate, 
+                         predicates.TfidfNGramSearchPredicate,
+                         predicates.TfidfTextCanopyPredicate, 
+                         predicates.TfidfTextSearchPredicate)
 
 
-
-class TextType(StringType) :
+class TextType(FieldType) :
     type = "Text"
+
+    _predicate_functions = base_predicate_functions 
+
+    _index_predicates = (predicates.TfidfTextCanopyPredicate, 
+                         predicates.TfidfTextSearchPredicate)
+    _index_thresholds = (0.2, 0.4, 0.6, 0.8)
 
     def __init__(self, definition) :
         super(TextType, self).__init__(definition)
+
 
         if 'corpus' not in definition :
             definition['corpus'] = []

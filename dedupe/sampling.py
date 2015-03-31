@@ -1,3 +1,7 @@
+from __future__ import division
+from builtins import range, zip
+from future.utils import viewitems
+
 from collections import deque
 import random
 import functools
@@ -7,16 +11,16 @@ from collections import defaultdict
 
 def blockedSample(sampler, sample_size, predicates, *args) :
     
-    blocked_sample = set([])
+    blocked_sample = set()
     remaining_sample = sample_size - len(blocked_sample)
     previous_sample_size = 0
 
     while remaining_sample and predicates :
         random.shuffle(predicates)
 
-        new_sample = list(sampler(remaining_sample, 
-                                  predicates,
-                                  *args))
+        new_sample = sampler(remaining_sample, 
+                             predicates,
+                             *args)
 
         filtered_sample = (subsample for subsample 
                            in new_sample if subsample)
@@ -24,7 +28,7 @@ def blockedSample(sampler, sample_size, predicates, *args) :
         blocked_sample.update(itertools.chain.from_iterable(filtered_sample))
 
         growth = len(blocked_sample) - previous_sample_size
-        growth_rate = growth/float(remaining_sample)
+        growth_rate = growth/remaining_sample
 
         remaining_sample = sample_size - len(blocked_sample)
         previous_sample_size = len(blocked_sample)
@@ -52,11 +56,7 @@ def dedupeSamplePredicates(sample_size, predicates, items) :
             continue
 
         items.rotate(random.randrange(n_items))
-
-        try : # the reverse method was only added in python 2.7
-            items.reverse()
-        except AttributeError :
-            items = deque(reversed(items))
+        items.reverse()
 
         yield dedupeSamplePredicate(subsample_size,
                                     predicate,
@@ -70,7 +70,8 @@ def dedupeSamplePredicate(subsample_size, predicate, items) :
     field = predicate.field
 
     for pivot, (index, record) in enumerate(items) :
-        if not record[field] :
+        column = record[field]
+        if not column :
             continue
 
         if pivot == 10000:
@@ -133,7 +134,12 @@ def linkSamplePredicate(subsample_size, predicate, items1, items2) :
             if min(len(red), len(blue)) + len(sample) < 10 :
                 return sample
 
-        block_keys = predicate_function(record[field])
+        column = record[field]
+        if not column :
+            red, blue = blue, red
+            continue
+
+        block_keys = predicate_function(column)
         for block_key in block_keys:
             if blue.get(block_key):
                 pair = sort_pair(blue[block_key].pop(), index)
@@ -150,7 +156,11 @@ def linkSamplePredicate(subsample_size, predicate, items1, items2) :
         red, blue = blue, red
 
     for index, record in itertools.islice(items2, len(items1)) :
-        block_keys = predicate_function( record[field] )
+        column = record[field]
+        if not column :
+            continue
+
+        block_keys = predicate_function(column)
         for block_key in block_keys:
             if red.get(block_key):
                 pair = sort_pair(red[block_key].pop(), index)
@@ -165,9 +175,9 @@ def linkSamplePredicate(subsample_size, predicate, items1, items2) :
     return sample
 
 def evenSplits(total_size, num_splits) :
-    avg = total_size/float(num_splits) 
+    avg = total_size/num_splits
     split = 0
-    for _ in xrange(num_splits) :
+    for _ in range(num_splits) :
         split += avg - int(split)
         yield int(split)
 
@@ -177,7 +187,7 @@ def subsample(total_size, predicates) :
         yield split, predicate
 
 def interleave(*iterables) :
-    return itertools.chain.from_iterable(itertools.izip(*iterables))
+    return itertools.chain.from_iterable(zip(*iterables))
 
 def sort_pair(a, b) :
     if a > b :
@@ -186,10 +196,7 @@ def sort_pair(a, b) :
         return (a, b)
 
 def randomDeque(data) :
-    try : # viewitems comes in at python 2.7
-        data_q = deque(random.sample(data.viewitems(), len(data)))
-    except AttributeError : 
-        data_q = deque(random.sample(data.items(), len(data)))
+    data_q = deque(random.sample(viewitems(data), len(data)))
     
     return data_q
 

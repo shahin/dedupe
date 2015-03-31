@@ -2,17 +2,15 @@
 # -*- coding: utf-8 -*-
 
 # provides functions for selecting a sample of training data
+from __future__ import division
 
 from collections import defaultdict
 import itertools
 from itertools import combinations, islice
-import blocking
-import predicates
-import core
+from . import blocking, predicates, core, index
 import numpy
 import logging
 import random
-import index
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +24,7 @@ def findUncertainPairs(field_distances, data_model, bias=0.5):
 
     probability = core.scorePairs(field_distances, data_model)
 
-    p_max = (1.0 - bias)
+    p_max = (1 - bias)
     logger.info(p_max)
 
     informativity = numpy.copy(probability)
@@ -94,8 +92,8 @@ def semiSupervisedNonDuplicates(data_sample,
 
 def trainingData(training_pairs, record_ids) :
 
-    record_pairs = set([])
-    tuple_pairs = set([])
+    record_pairs = set()
+    tuple_pairs = set()
     for pair in training_pairs :
         record_pairs.add(tuple([(record_ids[record], record) 
                                 for record in pair]))
@@ -127,7 +125,10 @@ def blockTraining(training_pairs,
             {})
 
     # Setup
-    record_ids = defaultdict(itertools.count().next)
+    try : # py 2
+        record_ids = defaultdict(itertools.count().next) 
+    except AttributeError : # py 3
+        record_ids = defaultdict(itertools.count().__next__)
 
     dupe_pairs, training_dupes = trainingData(training_pairs['match'], 
                                               record_ids)
@@ -165,7 +166,7 @@ def blockTraining(training_pairs,
 
     logger.debug("Uncovered Dupes")
     if uncovered_dupes :
-        id_records = dict((v,k) for k,v in record_ids.items())
+        id_records = {v : k for k, v in record_ids.items()}
     for i, (rec_1, rec_2) in enumerate(uncovered_dupes) :
         logger.debug("uncovered pair %s" % (i,))
         logger.debug(id_records[rec_1])
@@ -180,10 +181,12 @@ def blockTraining(training_pairs,
     for predicate in final_predicate_set :
         logger.info(predicate)
 
+    final_predicates = tuple(final_predicate_set)
+
     if final_predicate_set:
-        return (final_predicate_set, 
+        return (final_predicates, 
                 removeUnusedStopWords(coverage.stop_words,
-                                      final_predicate_set))
+                                      final_predicates))
     else:
         raise ValueError('No predicate found! We could not learn a single good predicate. Maybe give Dedupe more training data')
 
@@ -218,7 +221,7 @@ def findOptimumBlocking(uncovered_dupes,
 
     uncovered_dupes = set(uncovered_dupes)
 
-    final_predicate_set = set([])
+    final_predicate_set = set()
     while len(uncovered_dupes) > epsilon:
 
         best_cover = 0
@@ -226,7 +229,7 @@ def findOptimumBlocking(uncovered_dupes,
         for predicate in dupe_coverage :
             dupes = len(dupe_coverage[predicate])
             distinct = len(distinct_coverage[predicate])
-            cover = (dupes + 1.0)/(distinct + 1.0)
+            cover = (dupes + 1)/(distinct + 1)
             if cover > best_cover:
                 best_cover = cover
                 best_predicate = predicate
@@ -262,7 +265,7 @@ def removeSubsets(uncovered_dupes, predicate_set, coverage) :
     dupe_coverage = coverage.predicateCoverage(predicate_set,
                                                uncovered_dupes)
     uncovered_dupes = set(uncovered_dupes)
-    final_set = set([])
+    final_set = set()
 
     while uncovered_dupes :
         best_predicate = None
@@ -318,12 +321,13 @@ class Coverage(object) :
                 if record_1_id != rec_1 :
                     blocks_1 = set(predicate(record_1))
                     rec_1 = record_1_id
-                    
-                blocks_2 = predicate(record_2)
-                field_preds = blocks_1 & set(blocks_2)
-                if field_preds :
-                    rec_pair = record_1_id, record_2_id
-                    self.overlap[predicate].add(rec_pair)
+
+                if blocks_1 :
+                    blocks_2 = predicate(record_2)
+                    field_preds = blocks_1 & set(blocks_2)
+                    if field_preds :
+                        rec_pair = record_1_id, record_2_id
+                        self.overlap[predicate].add(rec_pair)
 
 
 
@@ -362,7 +366,7 @@ class DedupeCoverage(Coverage) :
 class RecordLinkCoverage(Coverage) :
 
     def _records_to_index(self, pairs) :
-        return set([record_2 for _, record_2 in pairs])
+        return {record_2 for _, record_2 in pairs}
 
 
 class CustomPredicateConstraints(Coverage):
@@ -403,10 +407,10 @@ def stopWords(data, indices) :
 
         doc_freq.sort(reverse=True)
         
-        N = float(tf_index.index.documentCount())
+        N = tf_index.index.documentCount()
         threshold = int(max(1000, N * 0.05))
 
-        stop_words = set([])
+        stop_words = set()
         
         for frequency, word in doc_freq :
             if frequency > threshold :
