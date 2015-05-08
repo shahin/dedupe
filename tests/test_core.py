@@ -10,7 +10,7 @@ class RandomPairsTest(unittest.TestCase) :
         self.assertRaises(ValueError, dedupe.core.randomPairs, 1, 10)
         assert dedupe.core.randomPairs(10, 10)
         random.seed(123)
-        numpy.random.seed(123)
+        dedupe.rand.seed(123)
         random_pairs = dedupe.core.randomPairs(10, 5)
         assert random_pairs == [( 0,  3),
                                 ( 3,  8),
@@ -34,7 +34,7 @@ class RandomPairsTest(unittest.TestCase) :
             set(sample)
 
         random.seed(123)
-        numpy.random.seed(123)
+        dedupe.rand.seed(123)
         assert numpy.array_equal(dedupe.core.randomPairs(10**3, 1),
                                  numpy.array([(292, 413)]))
 
@@ -63,7 +63,7 @@ class RandomPairsTest(unittest.TestCase) :
 
 
         random.seed(123)
-        numpy.random.seed(123)
+        dedupe.rand.seed(123)
         pairs = dedupe.core.randomPairsMatch(10, 10, 10)
         assert pairs == set([(7, 3), (3, 3), (2, 9), (6, 0), (2, 0), 
                              (1, 9), (9, 4), (0, 4), (1, 0), (1, 1)])

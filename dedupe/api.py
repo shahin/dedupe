@@ -12,7 +12,6 @@ import logging
 import pickle
 import numpy
 import multiprocessing
-import random
 import warnings
 import copy
 import os
@@ -783,7 +782,7 @@ class ActiveMatching(Matching) :
         
         
         if self.training_data.shape[0] == 0 :
-            rand_int = random.randint(0, len(self.data_sample)-1)
+            rand_int = dedupe.rand.randint(0, len(self.data_sample)-1)
             random_pair = self.data_sample[rand_int]
             exact_match = (random_pair[0], random_pair[0]) 
             self._addTrainingData({u'match':[exact_match, exact_match],

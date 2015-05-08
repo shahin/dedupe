@@ -9,6 +9,8 @@ import itertools
 import warnings
 from collections import defaultdict
 
+import dedupe.rand
+
 def blockedSample(sampler, sample_size, predicates, *args) :
     
     blocked_sample = set()
@@ -16,7 +18,7 @@ def blockedSample(sampler, sample_size, predicates, *args) :
     previous_sample_size = 0
 
     while remaining_sample and predicates :
-        random.shuffle(predicates)
+        dedupe.rand.shuffle(predicates)
 
         new_sample = sampler(remaining_sample, 
                              predicates,

@@ -8,6 +8,7 @@ import logging
 import warnings
 
 import dedupe.core
+import dedupe.rand
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,8 +19,7 @@ def gridSearch(training_data,
                original_data_model,
                num_cores,
                k=3,
-               search_space=[.00001, .0001, .001, .01, .1, 1],
-               randomize=True):
+               search_space=[.00001, .0001, .001, .01, .1, 1]):
 
     if num_cores < 2 :
         from multiprocessing.dummy import Pool
@@ -28,7 +28,7 @@ def gridSearch(training_data,
 
     pool = Pool()
 
-    training_data = training_data[numpy.random.permutation(training_data.size)]
+    training_data = training_data[dedupe.rand.permutation(training_data.size)]
 
     logger.info('using cross validation to find optimum alpha...')
     best_score = 0

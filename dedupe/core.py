@@ -20,6 +20,7 @@ import tempfile
 import os
 
 import dedupe.backport as backport
+import dedupe.rand
 
 class ChildProcessError(Exception) :
     pass
@@ -30,13 +31,13 @@ def randomPairsWithReplacement(n_records, sample_size) :
     warnings.warn("There may be duplicates in the sample")
 
     try :
-        random_indices = numpy.random.randint(n_records, 
-                                              size=sample_size*2)
+        random_indices = dedupe.rand.randint(n_records,
+                                               size=sample_size*2)
     except OverflowError:
         max_int = numpy.iinfo('int').max
         warnings.warn("Asked to sample pairs from %d records, will only sample pairs from first %d records" % (n_records, max_int))
-        random_indices = numpy.random.randint(max_int, 
-                                              size=sample_size*2)
+        random_indices = dedupe.rand.randint(max_int, 
+                                               size=sample_size*2)
 
 
         
@@ -68,7 +69,7 @@ def randomPairs(n_records, sample_size):
 
         random_indices = numpy.arange(n)
     else :
-        random_indices = numpy.random.randint(int(n), size=sample_size)
+        random_indices = dedupe.rand.randint(int(n), size=sample_size)
 
     random_indices = random_indices.astype('uint')
 
@@ -96,8 +97,8 @@ def randomPairsMatch(n_records_A, n_records_B, sample_size):
         return cartesian((numpy.arange(n_records_A),
                           numpy.arange(n_records_B)))
 
-    A_samples = numpy.random.randint(n_records_A, size=sample_size)
-    B_samples = numpy.random.randint(n_records_B, size=sample_size)
+    A_samples = dedupe.rand.randint(n_records_A, size=sample_size)
+    B_samples = dedupe.rand.randint(n_records_B, size=sample_size)
     pairs = zip(A_samples,B_samples)
     set_pairs = set(pairs)
 

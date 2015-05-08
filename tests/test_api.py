@@ -146,7 +146,7 @@ class ActiveMatch(unittest.TestCase) :
 class DedupeTest(unittest.TestCase):
   def setUp(self) : 
     random.seed(123) 
-    numpy.random.seed(456)
+    dedupe.rand.seed(456)
 
     field_definition = [{'field' : 'name', 'type': 'String'}, 
                         {'field' :'age', 'type': 'String'}]
@@ -176,7 +176,7 @@ class DedupeTest(unittest.TestCase):
   def test_randomSample(self) :
 
     random.seed(6)
-    numpy.random.seed(6)
+    dedupe.rand.seed(6)
     self.deduper.sample(data_dict, 30, 1)
 
     correct_result = [(dedupe.frozendict({'age': '50', 'name': 'Linda'}), 
@@ -202,7 +202,7 @@ class DedupeTest(unittest.TestCase):
 class LinkTest(unittest.TestCase):
   def setUp(self) : 
     random.seed(123)
-    numpy.random.seed(456)
+    dedupe.rand.seed(456)
 
     field_definition = [{'field' : 'name', 'type': 'String'}, 
                         {'field' :'age', 'type': 'String'}]
